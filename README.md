@@ -1,414 +1,64 @@
-# Actividad 6 - Detección de Objetos con RCNN y YOLO
+# Comparativa de Rendimiento: Detección de Objetos en Tiempo Real e Imágenes Estáticas
 
-Proyecto de Visión Artificial enfocado en la detección de objetos utilizando dos aproximaciones principales:
-
-- **Faster R-CNN / Mask R-CNN** (detectores de dos etapas)
-- **YOLO11n / YOLOv8** (detectores de una etapa)
-
-La aplicación permite realizar detección sobre:
-
-- Imágenes estáticas
-- Videos
-- Simulación de detección en tiempo real mediante cámara
-
-Los modelos funcionan localmente utilizando Python, OpenCV, PyTorch y Ultralytics.
+Este repositorio contiene las pruebas y el análisis comparativo de rendimiento entre dos de las arquitecturas más utilizadas en visión por computadora: **YOLO (v8/v11n) de Ultralytics** y **Faster R-CNN de Torchvision**. Las pruebas evalúan el comportamiento de los modelos frente a imágenes estáticas y flujos de video en tiempo real (Webcam) utilizando procesamiento por CPU.
 
 ---
 
-# Tecnologías utilizadas
+## 📊 Resumen de Hallazgos y Métricas
 
-- Python 3.12
-- OpenCV
-- PyTorch
-- Torchvision
-- Ultralytics YOLO
-- Flask (interfaz web YOLO)
-- NumPy
+El análisis de los resultados demuestra el balance clásico en visión por computadora: **Velocidad vs. Precisión** y **Análisis Estático vs. Análisis Dinámico (Video)**.
+
+| Métrica / Comportamiento | Faster R-CNN (`torchvision`) | YOLOv8 / YOLO11 (`ultralytics`) |
+| :--- | :--- | :--- |
+| **Confianza (Imagen Estática)** | Alta / Excelente (**100%**) | Alta / Buena (**93%**) |
+| **Confianza (Video en Vivo)** | Alta / Estable (**86.8% - 99.1%**) | Moderada / Fluctuante (**53% - 91%**) |
+| **Velocidad de Inferencia (CPU)**| Inviable para tiempo real (**1.2 FPS**) | Excelente para tiempo real (**36.8 FPS**) |
+| **Estabilidad de la Caja** | Muy estable (Rígida, sin parpadeo) | Inestable (Efecto de temblor/parpadeo) |
+| **Tipo de Arquitectura** | Dos etapas (*Two-stage detector*) | Una sola etapa (*One-stage detector*) |
 
 ---
 
-# Estructura del proyecto
+## 🔍 Análisis Técnico del Comportamiento
 
+### 1. Fase Estática (Imágenes Fijas)
+Al procesar imágenes fijas (como las pruebas con el *Golden Retriever*), el tiempo de cómputo por fotograma no afecta la experiencia del usuario.
+* **Faster R-CNN**: Al proponer regiones de interés antes de clasificar, extrae características más profundas obteniendo una confianza perfecta del **1.00 (100%)**.
+* **YOLO11n**: Como versión "nano", optimiza la ligereza matemática. Consigue un excelente **93%** de confianza de forma inmediata, ideal para hardware limitado.
+
+### 2. Fase Dinámica (Video en Tiempo Real)
+En flujos de video por cámara web, la métrica crítica son los **Fotogramas por Segundo (FPS)**.
+* **Faster R-CNN (`torchvision_resnet50`)**: Da como resultado **1.2 FPS**. El procesador (CPU) se satura calculando las regiones propuestas por la red interna ResNet50 en cada cuadro. La pantalla se actualiza cada segundo, siendo inviable para producción en tiempo real sin GPU.
+* **YOLOv8 (`ultralytics`)**: Alcanza **36.8 FPS**. Su arquitectura procesa la imagen completa en una sola pasada (*You Only Look Once*), superando con creces el estándar de fluidez (30 FPS) nativamente en CPU.
+
+---
+
+## ⚠️ El Fenómeno del "Parpadeo" en YOLOv8
+
+Durante las pruebas en video con YOLOv8, se observa que **el recuadro de detección tiembla o parpadea constantemente**, a diferencia de la rigidez de Faster R-CNN. Esto ocurre debido a dos factores:
+
+1. **Caída y Fluctuación de Confianza:** En video, la confianza de YOLOv8 para el objeto `cell phone` cae al **53%** (frente al 86.8% de Faster R-CNN). Cualquier micro-cambio de iluminación o movimiento hace que la confianza baje momentáneamente del umbral mínimo de visualización, provocando que la caja desaparezca y reaparezca ("parpadee").
+2. **Falta de Consistencia Temporal:** El script analiza cada fotograma como una foto aislada sin memoria del cuadro anterior. Al ser una red más pequeña, es más sensible al ruido del sensor de la cámara web, variando las coordenadas de la caja a cada instante.
+
+---
+
+## 🛠️ Tecnologías Utilizadas
+
+### Implementación Faster R-CNN
+```python
+from torchvision.models.detection import fastercnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
+from torchvision.transforms import functional as F
 ```
-deteccion_objetos/
 
-│
-├── faster_rcnn/
-│   │
-│   ├── main.py                  # Entrada principal Faster/Mask R-CNN
-│   ├── requirements.txt
-│   │
-│   ├── src/
-│   │   ├── detector.py           # Clase detector RCNN
-│   │   ├── train.py              # Fine tuning
-│   │   └── evaluate.py           # Evaluación mAP
-│   │
-│   ├── utils/
-│   │   └── visualization.py      # Visualización de resultados
-│   │
-│   ├── data/
-│   │   └── images/
-│   │
-│   └── outputs/
-│
-│
-├── yolo_detector/
-│   │
-│   ├── app.py                    # Aplicación web YOLO
-│   ├── iniciar.bat
-│   ├── requirements.txt
-│   │
-│   ├── templates/
-│   │   └── index.html
-│   │
-│   └── static/
-│       ├── uploads/
-│       └── results/
-│
-│
-├── camera_rcnn.py                # RCNN detección cámara
-├── camera_yolo.py                # YOLO detección cámara
-│
-└── README.md
+### Implementación YOLO
+```python
+from ultralytics import YOLO
 ```
 
 ---
 
-# 1. Detección con Faster R-CNN / Mask R-CNN
-
-## Descripción
-
-Se implementó un detector basado en **Faster R-CNN con backbone ResNet-50 + FPN** utilizando Torchvision.
-
-Faster R-CNN es un modelo de dos etapas:
-
-1. Generación de regiones candidatas mediante RPN.
-2. Clasificación y refinamiento de bounding boxes.
-
-También se incluye soporte para:
-
-- Faster R-CNN v1
-- Faster R-CNN v2
-- Mask R-CNN (segmentación)
-
----
-
-## Características
-
-- Detección en imágenes.
-- Procesamiento de videos.
-- Visualización de bounding boxes.
-- Clasificación usando COCO Dataset.
-- Segmentación mediante Mask R-CNN.
-- Evaluación mediante mAP.
-
----
-
-## Ejecución imagen
-
-Ejemplo:
-
-```bash
-python main.py --image dog.jpg
-```
-
-Mask R-CNN:
-
-```bash
-python main.py --image foto.jpg --model mask
-```
-
-Cambiar confianza:
-
-```bash
-python main.py --image foto.jpg --confidence 0.7
-```
-
-Comparar modelos:
-
-```bash
-python main.py --image foto.jpg --compare
-```
-
----
-
-## Ejecución video
-
-```bash
-python main.py --video video.mp4
-```
-
-Ejemplo:
-
-```bash
-python main.py --video clip.mp4 --output resultado.mp4
-```
-
----
-
-# 2. Detección con YOLO
-
-## Descripción
-
-Se implementó detección utilizando YOLO:
-
-- YOLO11n para aplicación web local.
-- YOLOv8 para detección en cámara.
-
-YOLO utiliza una arquitectura de una etapa:
-
-Imagen → Red neuronal → Bounding boxes + clases
-
-Su principal ventaja es la velocidad.
-
----
-
-# Aplicación web YOLO11n
-
-Características:
-
-- Funciona completamente local.
-- No requiere API.
-- Detecta 80 clases COCO.
-- Permite subir imágenes.
-- Guarda resultados anotados.
-
----
-
-## Ejecución
-
-Entrar a:
-
-```
-yolo_detector/
-```
-
-Ejecutar:
-
-```bash
-python app.py
-```
-
-Abrir:
-
-```
-http://localhost:5000
-```
-
-También puede iniciarse con:
-
-```
-iniciar.bat
-```
-
----
-
-# Detección YOLO en tiempo real
-
-Ejecutar:
-
-```bash
-python camera_yolo.py
-```
-
-Funciones:
-
-- Captura cámara.
-- Detección frame por frame.
-- Visualización FPS.
-- Bounding boxes en tiempo real.
-
----
-
-# Detección RCNN en tiempo real
-
-Ejecutar:
-
-```bash
-python camera_rcnn.py
-```
-
-Funciones:
-
-- Captura webcam.
-- Inferencia Faster R-CNN.
-- Dibujado mediante OpenCV.
-- Medición FPS.
-
----
-
-# Instalación
-
-Crear entorno virtual:
-
-Windows:
-
-```bash
-python -m venv venv
-
-venv\Scripts\activate
-```
-
-Linux/Mac:
-
-```bash
-python -m venv venv
-
-source venv/bin/activate
-```
-
-Instalar dependencias:
-
-```bash
-pip install -r requirements.txt
-```
-
-o:
-
-```bash
-pip install torch torchvision ultralytics flask opencv-python
-```
-
----
-
-# Parámetros ajustables
-
-| Parámetro | Descripción |
-|-|-|
-| Confidence | Confianza mínima para mostrar detección |
-| IoU / NMS | Controla eliminación de cajas repetidas |
-| Modelo | Variante usada para inferencia |
-
-Ejemplo:
-
-```bash
---confidence 0.5
-```
-
----
-
-# Comparación de comportamiento
-
-## Imágenes
-
-En imágenes estáticas:
-
-### Faster R-CNN
-
-Ventajas:
-
-- Mayor precisión.
-- Mejor localización de objetos pequeños.
-- Mejores resultados cuando la exactitud es prioridad.
-
-Desventajas:
-
-- Mayor tiempo de procesamiento.
-- Más consumo de memoria.
-
-
-### YOLO
-
-Ventajas:
-
-- Inferencia rápida.
-- Menor consumo.
-- Ideal para aplicaciones en tiempo real.
-
-Desventajas:
-
-- Puede perder objetos pequeños.
-- Menor precisión en escenas complejas.
-
-
----
-
-# Videos y tiempo real
-
-En video la diferencia aumenta:
-
-| Modelo | Velocidad | Precisión | Uso recomendado |
-|-|-|-|-|
-| Faster R-CNN | Media/Baja | Alta | Análisis offline |
-| Mask R-CNN | Baja | Muy alta | Segmentación |
-| YOLO | Alta | Buena | Tiempo real |
-
-
-Faster R-CNN procesa cada frame con mayor costo debido a la generación de regiones propuestas.
-
-YOLO procesa cada imagen completa en una sola pasada, logrando mayores FPS.
-
----
-
-# Métricas evaluadas
-
-## FPS
-
-Frames por segundo procesados.
-
-Fórmula:
-
-```
-FPS = 1 / tiempo_de_procesamiento
-```
-
-Mayor FPS significa mejor rendimiento en tiempo real.
-
-
----
-
-## Confianza
-
-Indica la probabilidad estimada de la detección.
-
-Ejemplo:
-
-```
-Perro 0.92
-```
-
-significa 92% de confianza.
-
-
----
-
-## mAP
-
-Mean Average Precision.
-
-Evalúa:
-
-- precisión de clasificación
-- calidad de bounding boxes
-
-
-Faster R-CNN suele obtener mejores valores mAP.
-
-YOLO ofrece mejor equilibrio velocidad/precisión.
-
-
----
-
-# Conclusiones
-
-Los experimentos muestran que:
-
-- Faster R-CNN presenta mejor precisión pero mayor costo computacional.
-- Mask R-CNN agrega segmentación pero requiere más recursos.
-- YOLO ofrece una solución más eficiente para aplicaciones en tiempo real.
-- Para análisis de imágenes donde importa la precisión, RCNN es adecuado.
-- Para cámaras, monitoreo y sistemas interactivos, YOLO es la mejor alternativa.
-
----
-
-# Referencias
-
-- Ren et al.  
-  Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks
-
-- He et al.  
-  Mask R-CNN
-
-- Ultralytics YOLO Documentation
-
-- Torchvision Detection Models
+## 🚀 Próximas Mejoras (Solución al Parpadeo)
+
+Para mitigar el temblor en YOLOv8 manteniendo su alta tasa de FPS, se planea implementar:
+* **Object Tracking Nativo:** Reemplazar `model.predict()` por `model.track(source=0, persist=True)` para añadir consistencia temporal y memoria entre fotogramas.
+* **Filtro de Media Móvil (Smoothing):** Suavizar matemáticamente las coordenadas $(x, y)$ de las cajas delimitadoras.
+* **Ajuste de Umbrales:** Elevar el parámetro `conf` para filtrar detecciones dudosas y estabilizar el dibujo en pantalla.
