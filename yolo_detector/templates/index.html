@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detector YOLO11n — Local</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f3;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .app { max-width: 820px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .header { margin-bottom: 1.5rem; }
+    .header h1 { font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .badge-local {
+      font-size: 11px; font-weight: 500; padding: 3px 8px;
+      background: #E1F5EE; color: #0F6E56; border-radius: 20px;
+    }
+    .header p { font-size: 13px; color: #666; margin-top: 5px; }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 2px dashed #ccc; border-radius: 12px;
+      padding: 3rem; text-align: center; cursor: pointer;
+      background: #fafaf8; transition: all 0.15s;
+    }
+    .upload-zone:hover { background: #f0ede8; border-color: #999; }
+    .upload-zone.drag  { border-color: #185FA5; background: #E6F1FB; }
+    .upload-icon { font-size: 44px; color: #bbb; margin-bottom: 12px; }
+    .upload-text { font-size: 15px; color: #444; font-weight: 500; }
+    .upload-sub  { font-size: 12px; color: #999; margin-top: 6px; }
+    #fileInput { display: none; }
+
+    /* ── Controles ── */
+    .controls-card {
+      background: #fff; border: 1px solid #e8e8e5;
+      border-radius: 12px; padding: 1rem 1.25rem;
+      margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;
+    }
+    .ctrl-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 160px; }
+    .ctrl-group label { font-size: 12px; color: #666; font-weight: 500; }
+    .ctrl-row { display: flex; align-items: center; gap: 8px; }
+    .ctrl-row input[type=range] { flex: 1; accent-color: #185FA5; }
+    .ctrl-val { font-size: 13px; font-weight: 600; min-width: 38px; text-align: right; }
+
+    .btn-detect {
+      background: #185FA5; border: none; border-radius: 8px;
+      padding: 10px 24px; font-size: 14px; cursor: pointer;
+      color: white; font-weight: 600; display: flex; align-items: center; gap: 7px;
+      white-space: nowrap;
+    }
+    .btn-detect:hover    { background: #0C447C; }
+    .btn-detect:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-reset {
+      background: #fff; border: 1px solid #ccc; border-radius: 8px;
+      padding: 9px 16px; font-size: 13px; cursor: pointer;
+      color: #444; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-reset:hover { background: #f0ede8; }
+
+    /* ── Canvas / imagen resultado ── */
+    #resultImg {
+      width: 100%; border-radius: 10px;
+      border: 1px solid #ddd; display: block; margin-top: 1rem;
+    }
+
+    /* ── Status / error ── */
+    .status-bar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid #ddd; border-top-color: #185FA5;
+      border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-text { font-size: 13px; color: #666; }
+
+    .error-box {
+      background: #FCEBEB; border: 1px solid #F7C1C1;
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; color: #A32D2D; margin-top: 10px;
+    }
+
+    /* ── Stats ── */
+    .stats-row { display: flex; gap: 10px; margin-top: 1rem; flex-wrap: wrap; }
+    .stat-card {
+      background: #fff; border-radius: 8px; padding: 12px 16px;
+      flex: 1; min-width: 100px; border: 1px solid #e8e8e5;
+    }
+    .stat-label { font-size: 12px; color: #888; }
+    .stat-value { font-size: 24px; font-weight: 600; margin-top: 2px; }
+
+    /* ── Leyenda + grid ── */
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
+    .legend-dot  { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+
+    .results-panel { margin-top: 1.25rem; }
+    .results-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    .det-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
+    .det-card {
+      background: #fff; border-radius: 8px;
+      padding: 10px 12px; border: 1px solid #e8e8e5;
+    }
+    .det-label { font-size: 13px; font-weight: 600; }
+    .det-conf  { font-size: 11px; color: #888; margin-top: 2px; }
+    .det-badge {
+      display: inline-block; font-size: 11px;
+      padding: 2px 8px; border-radius: 20px;
+      margin-top: 5px; font-weight: 500;
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 500px) {
+      .controls-card { flex-direction: column; }
+      .btn-detect { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>
+      <i class="ti ti-scan"></i>
+      Detector de Objetos
+      <span class="badge-local"><i class="ti ti-home" style="font-size:11px;vertical-align:-1px;"></i> 100% local</span>
+    </h1>
+    <p>Powered by <strong>YOLO11n</strong> — sin internet, sin API key, gratis.</p>
+  </div>
+
+  <!-- Upload zone -->
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-icon"><i class="ti ti-photo-up"></i></div>
+    <div class="upload-text">Arrastra una imagen aquí o haz clic para seleccionar</div>
+    <div class="upload-sub">JPG · PNG · WEBP · BMP — máx. 10 MB</div>
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+
+  <!-- Controles -->
+  <div class="controls-card" id="controlsCard" style="display:none;">
+    <div class="ctrl-group">
+      <label><i class="ti ti-adjustments" style="font-size:13px;vertical-align:-1px;margin-right:3px;"></i>Umbral de confianza</label>
+      <div class="ctrl-row">
+        <input type="range" id="confSlider" min="1" max="95" value="30" step="1">
+        <span class="ctrl-val" id="confVal">30%</span>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <label><i class="ti ti-layout-grid" style="font-size:13px;vertical-align:-1px;margin-right:3px;"></i>Umbral IoU (NMS)</label>
+      <div class="ctrl-row">
+        <input type="range" id="iouSlider" min="10" max="90" value="45" step="5">
+        <span class="ctrl-val" id="iouVal">45%</span>
+      </div>
+    </div>
+    <button class="btn-detect" id="detectBtn">
+      <i class="ti ti-cpu"></i> Detectar
+    </button>
+    <button class="btn-reset" id="resetBtn">
+      <i class="ti ti-refresh"></i> Nueva
+    </button>
+  </div>
+
+  <!-- Estado / error -->
+  <div id="statusBar" class="status-bar hidden">
+    <div class="spinner"></div>
+    <span class="status-text" id="statusText">Procesando con YOLO11n...</span>
+  </div>
+  <div id="errorBox" class="error-box hidden"></div>
+
+  <!-- Imagen resultado -->
+  <img id="resultImg" class="hidden" alt="Resultado de detección">
+
+  <!-- Resultados -->
+  <div id="resultsSection" class="hidden">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">Objetos detectados</div><div class="stat-value" id="statCount">0</div></div>
+      <div class="stat-card"><div class="stat-label">Confianza promedio</div><div class="stat-value" id="statConf">—</div></div>
+      <div class="stat-card"><div class="stat-label">Clases únicas</div><div class="stat-value" id="statClasses">0</div></div>
+      <div class="stat-card"><div class="stat-label">Resolución</div><div class="stat-value" id="statSize">—</div></div>
+    </div>
+
+    <div class="legend" id="legendRow"></div>
+
+    <div class="results-panel">
+      <div class="results-title">Detecciones (ordenadas por confianza)</div>
+      <div class="det-grid" id="detGrid"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Paleta visual (coincide con colores BGR de Python pero en hex) ────────
+  const PALETTE = [
+    { bg:"#E6F1FB", text:"#185FA5" },
+    { bg:"#EAF3DE", text:"#3B6D11" },
+    { bg:"#FAEEDA", text:"#BA7517" },
+    { bg:"#EEEDFE", text:"#534AB7" },
+    { bg:"#E1F5EE", text:"#0F6E56" },
+    { bg:"#FAECE7", text:"#993C1D" },
+    { bg:"#FBEAF0", text:"#993556" },
+    { bg:"#FCEBEB", text:"#A32D2D" },
+  ];
+
+  let colorMap = {};
+  let colorIdx = 0;
+  let currentFile = null;
+
+  function getColor(label) {
+    if (!colorMap[label]) {
+      colorMap[label] = PALETTE[colorIdx % PALETTE.length];
+      colorIdx++;
+    }
+    return colorMap[label];
+  }
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  const uploadZone    = document.getElementById('uploadZone');
+  const fileInput     = document.getElementById('fileInput');
+  const controlsCard  = document.getElementById('controlsCard');
+  const detectBtn     = document.getElementById('detectBtn');
+  const resetBtn      = document.getElementById('resetBtn');
+  const statusBar     = document.getElementById('statusBar');
+  const statusText    = document.getElementById('statusText');
+  const errorBox      = document.getElementById('errorBox');
+  const resultImg     = document.getElementById('resultImg');
+  const resultsSection= document.getElementById('resultsSection');
+  const confSlider    = document.getElementById('confSlider');
+  const iouSlider     = document.getElementById('iouSlider');
+  const confVal       = document.getElementById('confVal');
+  const iouVal        = document.getElementById('iouVal');
+
+  confSlider.addEventListener('input', () => confVal.textContent = confSlider.value + '%');
+  iouSlider.addEventListener('input',  () => iouVal.textContent  = iouSlider.value + '%');
+
+  // ── Carga de imagen ───────────────────────────────────────────────────────
+  uploadZone.addEventListener('click',     () => fileInput.click());
+  uploadZone.addEventListener('dragover',  e  => { e.preventDefault(); uploadZone.classList.add('drag'); });
+  uploadZone.addEventListener('dragleave', ()  => uploadZone.classList.remove('drag'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag');
+    loadFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+
+  function loadFile(file) {
+    if (!file) return;
+    currentFile = file;
+    uploadZone.classList.add('hidden');
+    controlsCard.style.display = 'flex';
+    errorBox.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    resultImg.classList.add('hidden');
+    colorMap = {};
+    colorIdx = 0;
+  }
+
+  // ── Detección ─────────────────────────────────────────────────────────────
+  detectBtn.addEventListener('click', async () => {
+    if (!currentFile) return;
+
+    detectBtn.disabled = true;
+    statusBar.classList.remove('hidden');
+    errorBox.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    resultImg.classList.add('hidden');
+    statusText.textContent = 'Ejecutando YOLO11n...';
+    colorMap = {};
+    colorIdx = 0;
+
+    try {
+      const fd = new FormData();
+      fd.append('image', currentFile);
+      fd.append('conf',  confSlider.value / 100);
+      fd.append('iou',   iouSlider.value  / 100);
+
+      const resp = await fetch('/detect', { method: 'POST', body: fd });
+      const data = await resp.json();
+
+      if (!resp.ok) throw new Error(data.error || 'Error del servidor');
+
+      // Mostrar imagen anotada
+      resultImg.src = 'data:image/jpeg;base64,' + data.image_b64;
+      resultImg.classList.remove('hidden');
+
+      renderResults(data);
+
+    } catch (err) {
+      errorBox.textContent = 'Error: ' + err.message;
+      errorBox.classList.remove('hidden');
+    } finally {
+      detectBtn.disabled = false;
+      statusBar.classList.add('hidden');
+    }
+  });
+
+  // ── Renderizar resultados ─────────────────────────────────────────────────
+  function renderResults(data) {
+    const dets = data.detections || [];
+
+    // Stats
+    const avgConf = dets.length
+      ? Math.round(dets.reduce((s, d) => s + d.confidence, 0) / dets.length * 100)
+      : 0;
+    const unique = [...new Set(dets.map(d => d.label))];
+
+    document.getElementById('statCount').textContent   = dets.length;
+    document.getElementById('statConf').textContent    = dets.length ? avgConf + '%' : '—';
+    document.getElementById('statClasses').textContent = unique.length;
+    document.getElementById('statSize').textContent    = data.img_size.w + '×' + data.img_size.h;
+
+    // Leyenda
+    const legendRow = document.getElementById('legendRow');
+    legendRow.innerHTML = '';
+    unique.forEach(lbl => {
+      const col  = getColor(lbl);
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      item.innerHTML = `<div class="legend-dot" style="background:${col.text}"></div><span>${lbl}</span>`;
+      legendRow.appendChild(item);
+    });
+
+    // Tarjetas
+    const grid = document.getElementById('detGrid');
+    grid.innerHTML = '';
+    [...dets].sort((a, b) => b.confidence - a.confidence).forEach(det => {
+      const col  = getColor(det.label);
+      const card = document.createElement('div');
+      card.className = 'det-card';
+      card.innerHTML = `
+        <div class="det-label">${det.label}</div>
+        <div class="det-conf">
+          BBox: ${det.bbox.x1},${det.bbox.y1} → ${det.bbox.x2},${det.bbox.y2}
+        </div>
+        <span class="det-badge" style="background:${col.bg};color:${col.text}">
+          ${Math.round(det.confidence * 100)}% confianza
+        </span>`;
+      grid.appendChild(card);
+    });
+
+    resultsSection.classList.remove('hidden');
+  }
+
+  // ── Reset ─────────────────────────────────────────────────────────────────
+  resetBtn.addEventListener('click', () => {
+    currentFile = null;
+    fileInput.value = '';
+    uploadZone.classList.remove('hidden');
+    controlsCard.style.display = 'none';
+    resultImg.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    errorBox.classList.add('hidden');
+    colorMap = {};
+    colorIdx = 0;
+  });
+</script>
+
+</body>
+</html>
