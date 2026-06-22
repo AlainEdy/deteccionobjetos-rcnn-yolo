@@ -1,10 +1,10 @@
-# Comparativa de Rendimiento: Detección de Objetos en Tiempo Real e Imágenes Estáticas
+# Detección de Objetos en Tiempo Real e Imágenes Estáticas
 
 Este repositorio contiene las pruebas y el análisis comparativo de rendimiento entre dos de las arquitecturas más utilizadas en visión por computadora: **YOLO (v8/v11n) de Ultralytics** y **Faster R-CNN de Torchvision**. Las pruebas evalúan el comportamiento de los modelos frente a imágenes estáticas y flujos de video en tiempo real (Webcam) utilizando procesamiento por CPU.
 
 ---
 
-## 📊 Resumen de Hallazgos y Métricas
+## Resumen de Hallazgos y Métricas
 
 El análisis de los resultados demuestra el balance clásico en visión por computadora: **Velocidad vs. Precisión** y **Análisis Estático vs. Análisis Dinámico (Video)**.
 
@@ -18,7 +18,7 @@ El análisis de los resultados demuestra el balance clásico en visión por comp
 
 ---
 
-## 🔍 Análisis Técnico del Comportamiento
+## Análisis Técnico del Comportamiento
 
 ### 1. Fase Estática (Imágenes Fijas)
 Al procesar imágenes fijas (como las pruebas con el *Golden Retriever*), el tiempo de cómputo por fotograma no afecta la experiencia del usuario.
@@ -32,7 +32,7 @@ En flujos de video por cámara web, la métrica crítica son los **Fotogramas po
 
 ---
 
-## ⚠️ El Fenómeno del "Parpadeo" en YOLOv8
+## El Fenómeno del "Parpadeo" en YOLOv8
 
 Durante las pruebas en video con YOLOv8, se observa que **el recuadro de detección tiembla o parpadea constantemente**, a diferencia de la rigidez de Faster R-CNN. Esto ocurre debido a dos factores:
 
@@ -41,7 +41,7 @@ Durante las pruebas en video con YOLOv8, se observa que **el recuadro de detecci
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
+## Tecnologías Utilizadas
 
 ### Implementación Faster R-CNN
 ```python
@@ -55,10 +55,3 @@ from ultralytics import YOLO
 ```
 
 ---
-
-## 🚀 Próximas Mejoras (Solución al Parpadeo)
-
-Para mitigar el temblor en YOLOv8 manteniendo su alta tasa de FPS, se planea implementar:
-* **Object Tracking Nativo:** Reemplazar `model.predict()` por `model.track(source=0, persist=True)` para añadir consistencia temporal y memoria entre fotogramas.
-* **Filtro de Media Móvil (Smoothing):** Suavizar matemáticamente las coordenadas $(x, y)$ de las cajas delimitadoras.
-* **Ajuste de Umbrales:** Elevar el parámetro `conf` para filtrar detecciones dudosas y estabilizar el dibujo en pantalla.
